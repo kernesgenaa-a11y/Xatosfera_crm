@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GoogleMap } from '@/components/ui/GoogleMap';
 import { buildAutoPropertyTitle } from '@/lib/property-title';
-import watermarkUrl from '@/assets/angels1.png';
+import watermarkUrl from '@/assets/log.png';
 import { addWatermarkToImage } from '@/lib/image-watermark';
 import { getApiUrl } from '@/lib/api-url';
 import { z } from 'zod';

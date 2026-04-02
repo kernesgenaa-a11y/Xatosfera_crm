@@ -1,4 +1,4 @@
-const WORKER_FALLBACK_URL = 'https://crm-api.0991597753r.workers.dev';
+const WORKER_FALLBACK_URL = 'https://xatosfera-api-ts.kernesgenaa@gmail.com/workers.dev';
 
 export function getApiUrl(): string {
   const configured = import.meta.env.VITE_API_URL;

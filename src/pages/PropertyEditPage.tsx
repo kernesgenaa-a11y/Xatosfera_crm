@@ -32,7 +32,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GoogleMap } from '@/components/ui/GoogleMap';
 import { buildAutoPropertyTitle, isLegacyAutoPropertyTitle } from '@/lib/property-title';
-import watermarkUrl from '@/assets/angels1.png';
+import watermarkUrl from '@/assets/log.png';
 import { addWatermarkToImage } from '@/lib/image-watermark';
 import { getApiUrl } from '@/lib/api-url';
 import { PropertyDetailSchema, parseApiObject } from '@/lib/schemas';

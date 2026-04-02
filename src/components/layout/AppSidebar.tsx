@@ -27,9 +27,15 @@ import { useState } from 'react';
 import { useAuthImage } from '@/hooks/useAuthImage';
 
 const navItems = [
-  { key: 'dashboard', label: 'Головна', icon: LayoutDashboard, path: '/dashboard', permission: null },
+  {
+    key: 'dashboard',
+    label: 'Головна',
+    icon: LayoutDashboard,
+    path: '/dashboard',
+    permission: null,
+  },
   { key: 'matches', label: 'Метчі', icon: MessageCircle, path: '/matches', permission: null },
-  { key: 'properties', label: 'Об\'єкти', icon: Building2, path: '/properties', permission: null },
+  { key: 'properties', label: "Об'єкти", icon: Building2, path: '/properties', permission: null },
   { key: 'clients', label: 'Клієнти', icon: Contact, path: '/clients', permission: null },
   { key: 'deals', label: 'Угоди', icon: KanbanSquare, path: '/deals', permission: null },
   { key: 'calendar', label: 'Календар', icon: CalendarDays, path: '/calendar', permission: null },
@@ -57,8 +63,10 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
     return 'Агент';
   };
 
-  const filteredItems = navItems.filter((item) => !item.permission || hasPermission(item.permission));
-  
+  const filteredItems = navItems.filter(
+    (item) => !item.permission || hasPermission(item.permission),
+  );
+
   // Аватар через authenticated fetch (підтримка старого і нового Worker)
   const avatarUrl = useAuthImage(profile?.avatar_url);
 
@@ -72,13 +80,17 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
             className="bg-accent shadow-lg border border-border h-12 w-12 rounded-xl"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
-               {mobileOpen ? <X className="h-6 w-6 text-foreground" /> : <Menu className="h-6 w-6 text-foreground" />}
+            {mobileOpen ? (
+              <X className="h-6 w-6 text-foreground" />
+            ) : (
+              <Menu className="h-6 w-6 text-foreground" />
+            )}
           </Button>
-         <div className="p-2">
+          <div className="p-2">
             <div className="flex items-center gap-3">
-              <img src="/angels-logo.png" alt="ANGELS" className="h-10 w-10 object-contain rounded-lg" />
+              <img src="/log.png" alt="ANGELS" className="h-10 w-10 object-contain rounded-lg" />
               <div className="justify-center">
-                <h1 className="font-bold text-lg text-sidebar-primary">ANGELS</h1>
+                <h1 className="font-bold text-lg text-sidebar-primary">Ваша назва</h1>
                 <p className="text-xs text-sidebar-primary/60">Агенція Нерухомості</p>
               </div>
             </div>
@@ -100,7 +112,12 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
         </button>
       </div>
 
-      {mobileOpen && <div className="fixed inset-0 bg-black/50 z-[55] lg:hidden" onClick={() => setMobileOpen(false)} />}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[55] lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
       <aside
         className={cn(
@@ -112,9 +129,9 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
           {/* Logo */}
           <div className="p-5 border-b border-sidebar-border">
             <div className="flex items-center gap-3">
-              <img src="/angels-logo.png" alt="ANGELS" className="h-12 w-12 object-contain rounded-lg" />
+              <img src="/log.png" alt="ANGELS" className="h-12 w-12 object-contain rounded-lg" />
               <div>
-                <h1 className="font-bold text-lg text-sidebar-primary leading-tight">ANGELS</h1>
+                <h1 className="font-bold text-lg text-sidebar-primary leading-tight">Ваша назва</h1>
                 <p className="text-xs text-sidebar-primary/60">Агенція Нерухомості</p>
               </div>
             </div>
@@ -124,12 +141,13 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
           {profile && (
             <div className="p-4 border-b border-sidebar-border">
               <button
-               onClick={() => {
-        setProfileOpen(true);
-        if (window.innerWidth < 1024) {           // або просто setMobileOpen(false)
-          setMobileOpen(false);
-        }
-      }}
+                onClick={() => {
+                  setProfileOpen(true);
+                  if (window.innerWidth < 1024) {
+                    // або просто setMobileOpen(false)
+                    setMobileOpen(false);
+                  }
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors text-left"
               >
                 <Avatar className="w-10 h-10">
@@ -142,7 +160,9 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
                   )}
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-sidebar-foreground truncate">{profile.full_name}</p>
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    {profile.full_name}
+                  </p>
                   <p className="text-xs text-sidebar-foreground/60">{getRoleLabel()}</p>
                 </div>
                 <Settings className="h-4 w-4 text-sidebar-foreground/40" />
@@ -167,10 +187,20 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
                       : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
                   )}
                 >
-                  <Icon className={cn('h-5 w-5 transition-transform group-hover:scale-110', isActive && 'text-sidebar-primary-foreground')} />
+                  <Icon
+                    className={cn(
+                      'h-5 w-5 transition-transform group-hover:scale-110',
+                      isActive && 'text-sidebar-primary-foreground',
+                    )}
+                  />
                   <span className="font-medium flex-1">{item.label}</span>
                   {item.key === 'matches' && matchCount > 0 && (
-                    <Badge className={cn('h-7 min-w-7 px-1 flex items-center justify-center text-[12px]  bg-yellow-400 text-yellow-900 hover:bg-yellow-400 border-none', isActive && 'bg-red-400 text-red-900 hover:bg-red-500 border-none')}>
+                    <Badge
+                      className={cn(
+                        'h-7 min-w-7 px-1 flex items-center justify-center text-[12px]  bg-yellow-400 text-yellow-900 hover:bg-yellow-400 border-none',
+                        isActive && 'bg-red-400 text-red-900 hover:bg-red-500 border-none',
+                      )}
+                    >
                       {matchCount > 99 ? '99+' : matchCount}
                     </Badge>
                   )}
@@ -186,9 +216,9 @@ export const AppSidebar = ({ onBellClick }: AppSidebarProps = {}) => {
 
           {/* Footer */}
           <div className="p-4 border-t border-sidebar-border">
-            <Button 
-              variant="ghost" 
-              className=" w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent" 
+            <Button
+              variant="ghost"
+              className=" w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
               onClick={signOut}
             >
               <LogOut className="h-5 w-5" />
