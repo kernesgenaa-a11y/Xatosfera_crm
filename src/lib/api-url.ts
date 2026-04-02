@@ -1,4 +1,4 @@
-const WORKER_FALLBACK_URL = 'https://xatosfera-api-ts.kernesgenaa@gmail.com/workers.dev';
+const WORKER_FALLBACK_URL = 'https://xatosfera-api-ts.kernesgenaa.workers.dev';
 
 export function getApiUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
