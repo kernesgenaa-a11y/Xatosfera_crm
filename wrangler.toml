@@ -1,36 +1,41 @@
-#name = "xatosfera-api-ts"
-#main = "worker-index.js"
-#compatibility_date = "2024-01-01"
+name = "xatosfera-api"
+main = "worker-index.js"
+compatibility_date = "2024-01-01"
 
-#[[d1_databases]]
-#binding = "DB"
-#database_name = "crm"
-#database_id = "d8ee9d0c-ac4d-4f23-b1ff-8ac3d9a3d5a6"
+[[d1_databases]]
+binding = "DB"
+database_name = "xatosfera"
+database_id = "017e14d7-21c3-4f26-b311-8e0037557ec1"
 
-#[[r2_buckets]]
-#binding = "R2"
-#bucket_name = "crm"
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "xatosfera"
 
-#[images]
-#binding = "IMAGES"
+[images]
+binding = "IMAGES"
 
-#[browser]
-#binding = "BROWSER"
+[[queues.producers]]
+binding = "IMAGES_QUEUE"
+queue = "crm-images"
 
-#[observability]
-#enabled = false
-#head_sampling_rate = 1
+[[queues.consumers]]
+queue = "crm-images"
 
-#[observability.logs]
-#enabled = true
-#head_sampling_rate = 1
-#persist = true
-#invocation_logs = true
+[browser]
+binding = "BROWSER"
 
-#[observability.traces]
-#enabled = false
-#persist = true
-#head_sampling_rate = 1
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
 
 # Secrets (set via: wrangler secret put CF_ACCOUNT_ID / CF_API_TOKEN)
 # These are used for Browser Rendering REST API to generate PDF presentations
