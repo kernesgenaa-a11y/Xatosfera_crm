@@ -1,6 +1,6 @@
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/schema",
-  "name": "xatosfera-crm-ts",
+  "name": "xatosfera-api-ts",
   "compatibility_date": "2026-04-02",
   "main": "worker/src/index.ts",
   "type": "module",
