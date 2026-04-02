@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "lint:staged": "lint-staged",
     "preview": "vite preview",
+    "preview:wrangler": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
     "prepare": "husky",
     "test": "vitest run",
     "test:watch": "vitest",

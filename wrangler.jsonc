@@ -1,0 +1,13 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/schema",
+  "name": "xatosfera-crm-ts",
+  "compatibility_date": "2026-04-02",
+  "main": "worker/src/index.ts",
+  "type": "module",
+  "build": {
+    "command": "npm run build",
+    "upload": {
+      "format": "service-worker"
+    }
+  }
+}
