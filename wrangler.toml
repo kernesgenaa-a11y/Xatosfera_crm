@@ -1,5 +1,5 @@
-name = "xatosfera-api"
-main = "worker-index.js"
+name = "xatosfera-api-ts"
+main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [[d1_databases]]
@@ -36,6 +36,7 @@ invocation_logs = true
 [observability.traces]
 enabled = false
 head_sampling_rate = 1
+
 
 # Secrets (set via: wrangler secret put CF_ACCOUNT_ID / CF_API_TOKEN)
 # These are used for Browser Rendering REST API to generate PDF presentations
