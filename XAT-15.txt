@@ -1,0 +1,398 @@
+Work on Linear issue XAT-15:
+
+<issue identifier="XAT-15">
+<title>Фаза 4: UX/Функціонал</title>
+<description>
+## Мета
+
+Покращити UX та додати функціонал, який потребують юзери.
+
+**Repo:** `Vsevolodovichr/xatosfera`
+
+## Підзадачі
+
+1. **XAT-28** — Фільтри в URL (query params)
+2. **XAT-29** — Drag & Drop Kanban для угод
+3. **XAT-30** — Stub-сторінки для відсутніх розділів
+4. **XAT-31** — Мобільний UX (responsive)
+5. **XAT-32** — Skeleton loading замість спінерів
+6. **XAT-33** — Інтернаціоналізація (i18n файли)
+
+**Залежності:** Фаза 2 (XAT-13) бажано завершена.
+
+**Критерій завершення:** Фільтри збережені в URL, Kanban працює, додаток адаптивний на мобільних.
+</description>
+<team name="Xatosfera"/>
+<label>Feature</label>
+<sub-issues>
+<sub-issue identifier="XAT-28">
+<id>a4c522a3-3db9-40fe-8c49-cb5971d5ed66</id>
+<title>Фільтри в URL (query params) — збереження стану</title>
+<description>
+## Контекст
+
+Фільтри на сторінках PropertiesPage, ClientsPage, DealsPage зберігаються тільки в React state. При refresh або share URL — фільтри скидаються.
+
+## Файли
+
+* **Створити:** `src/hooks/useUrlFilters.ts` (custom hook)
+* **Змінити:** `src/pages/PropertiesPage.tsx`
+* **Змінити:** `src/pages/ClientsPage.tsx`
+* **Змінити:** `src/pages/DealsPage.tsx`
+* **Змінити:** `src/pages/NotesPage.tsx`
+
+## Кроки
+
+1. Створити `src/hooks/useUrlFilters.ts`:
+
+   ```ts
+   import { useSearchParams } from 'react-router-dom';
+   
+   export function useUrlFilters<T extends Record<string, string>>(defaults: T) {
+     const [searchParams, setSearchParams] = useSearchParams();
+     
+     const filters = useMemo(() => {
+       const result = { ...defaults };
+       for (const key of Object.keys(defaults)) {
+         const value = searchParams.get(key);
+         if (value) result[key] = value;
+       }
+       return result;
+     }, [searchParams, defaults]);
+     
+     const setFilter = useCallback((key: string, value: string) => {
+       setSearchParams(prev => {
+         if (value === defaults[key] || !value) prev.delete(key);
+         else prev.set(key, value);
+         return prev;
+       });
+     }, [setSearchParams, defaults]);
+     
+     return { filters, setFilter, setSearchParams };
+   }
+   ```
+2. У `PropertiesPage.tsx` замінити `useState` фільтрів на `useUrlFilters()`:
+
+   ```ts
+   // БУЛО:
+   const [status, setStatus] = useState('all');
+   const [type, setType] = useState('all');
+   
+   // СТАЛО:
+   const { filters, setFilter } = useUrlFilters({ status: 'all', type: 'all', search: '' });
+   ```
+3. Повторити для ClientsPage, DealsPage, NotesPage
+4. URL виглядатиме як: `/properties?status=active&type=apartment&search=центр`
+
+## НЕ робити
+
+* Не зберігати фільтри в localStorage
+* Не використовувати state management (Redux, Zustand)
+
+## Acceptance Criteria
+
+- [ ] Фільтри відображаються в URL query params
+- [ ] При refresh сторінки фільтри зберігаються
+- [ ] При copy/paste URL — відкривається з тими ж фільтрами
+- [ ] Очищення фільтра видаляє його з URL
+- [ ] `npm run build` проходить
+- [ ] Працює для properties, clients, deals, notes
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-30">
+<id>36eff88b-32f6-44d1-a3d1-2aebd599e489</id>
+<title>Stub-сторінки для відсутніх розділів меню</title>
+<description>
+## Контекст
+
+Sidebar (`src/components/layout/AppSidebar.tsx`) має пункти меню, які ведуть на порожні або неіснуючі сторінки. Потрібно створити stub-сторінки з placeholder контентом.
+
+## Файли
+
+* **Перевірити:** `src/components/layout/AppSidebar.tsx` — список пунктів меню
+* **Перевірити:** `src/App.tsx` — існуючі routes
+* **Створити:** stub-сторінки для відсутніх routes
+
+## Кроки
+
+1. Відкрити `AppSidebar.tsx` і виписати всі пункти меню з їх `href`
+2. Порівняти з routes в `App.tsx` — знайти відсутні
+3. Для кожного відсутнього route створити stub-сторінку:
+
+   ```tsx
+   // src/pages/XxxPage.tsx
+   export function XxxPage() {
+     return (
+       <div className="flex flex-col items-center justify-center h-full">
+         <h1 className="text-2xl font-bold">Назва розділу</h1>
+         <p className="text-muted-foreground mt-2">Цей розділ знаходиться в розробці</p>
+       </div>
+     );
+   }
+   ```
+4. Додати routes в `App.tsx`
+5. Переконатися що sidebar навігація не веде на 404
+
+## НЕ робити
+
+* Не реалізовувати функціонал — тільки placeholder
+* Не видаляти пункти з sidebar
+
+## Acceptance Criteria
+
+- [ ] Всі пункти sidebar ведуть на існуючі routes
+- [ ] Stub-сторінки мають заголовок та повідомлення "в розробці"
+- [ ] Жоден пункт меню не веде на 404
+- [ ] `npm run build` проходить
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-31">
+<id>2a06bf7a-a82b-4909-bf22-32cc44fdaadc</id>
+<title>Мобільний UX — responsive layout та sidebar</title>
+<description>
+## Контекст
+
+Додаток не адаптований для мобільних пристроїв. Sidebar не ховається, таблиці виходять за межі екрану.
+
+## Файли
+
+* **Змінити:** `src/components/layout/AppSidebar.tsx`
+* **Змінити:** `src/components/layout/AppLayout.tsx`
+* **Змінити:** `src/pages/PropertiesPage.tsx` (таблиця → картки на mobile)
+* **Змінити:** `src/pages/ClientsPage.tsx`
+* **Змінити:** `src/pages/DealsPage.tsx`
+* **Змінити:** `src/index.css` або Tailwind config
+
+## Кроки
+
+1. **Sidebar:**
+   * На mobile (`< md`) — sidebar як overlay/drawer з hamburger кнопкою
+   * Використати shadcn/ui `Sheet` компонент для mobile sidebar:
+
+     ```tsx
+     import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+     ```
+   * На desktop (`>= md`) — sidebar як зараз
+2. **Таблиці → Картки:**
+   * На mobile замінити `<table>` на вертикальні картки:
+
+     ```tsx
+     <div className="hidden md:block"><Table ... /></div>
+     <div className="md:hidden"><CardList ... /></div>
+     ```
+   * Або зробити таблицю горизонтально скролабельною: `overflow-x-auto`
+3. **Загальне:**
+   * `padding` та `gap` зменшити на mobile
+   * Кнопки фільтрів — горизонтальний scroll на mobile
+   * Модальні вікна — fullscreen на mobile
+4. Тестувати через Chrome DevTools responsive mode (iPhone 12, iPad)
+
+## НЕ робити
+
+* Не використовувати CSS media queries — тільки Tailwind responsive classes
+* Не створювати окремий mobile layout
+
+## Acceptance Criteria
+
+- [ ] Sidebar ховається на mobile, відкривається через hamburger
+- [ ] Таблиці не виходять за межі екрану на 375px ширині
+- [ ] Всі сторінки юзабельні на iPhone 12 (390px)
+- [ ] `npm run build` проходить
+- [ ] Desktop layout не змінився
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-33">
+<id>95f283cf-043c-42ca-ae60-37a26dbc65a8</id>
+<title>Інтернаціоналізація — переїзд на JSON файли (i18n)</title>
+<description>
+## Контекст
+
+`src/contexts/LanguageContext.tsx` (676 рядків) містить ВСІ переклади hardcoded в об'єкті. Підтримує UK та EN. Потрібно винести в JSON файли.
+
+## Файли
+
+* **Рефакторити:** `src/contexts/LanguageContext.tsx` (676 рядків → \~30 рядків)
+* **Створити:** `src/locales/uk.json`
+* **Створити:** `src/locales/en.json`
+
+## Кроки
+
+1. З `LanguageContext.tsx` витягнути об'єкт `translations` в окремі JSON файли:
+
+   ```
+   src/locales/uk.json
+   src/locales/en.json
+   ```
+2. JSON структура — flat keys з крапкою-розділювачем:
+
+   ```json
+   {
+     "nav.dashboard": "Дашборд",
+     "nav.properties": "Нерухомість",
+     "property.title": "Назва",
+     "property.address": "Адреса",
+     "common.save": "Зберегти",
+     "common.cancel": "Скасувати"
+   }
+   ```
+3. `LanguageContext.tsx` спростити до:
+
+   ```tsx
+   import uk from '@/locales/uk.json';
+   import en from '@/locales/en.json';
+   
+   const translations = { uk, en };
+   
+   function t(key: string): string {
+     return translations[language][key] || key;
+   }
+   ```
+4. Перевірити що всі існуючі виклики `t('key')` працюють
+5. Переконатися що обидві мови мають однакові ключі:
+
+   ```ts
+   // Додати перевірку в тести
+   const ukKeys = Object.keys(uk).sort();
+   const enKeys = Object.keys(en).sort();
+   expect(ukKeys).toEqual(enKeys);
+   ```
+
+## НЕ робити
+
+* НЕ використовувати i18next або react-intl — достатньо простого рішення
+* Не додавати нові мови
+* Не змінювати API функції `t()` — зберегти зворотну сумісність
+
+## Acceptance Criteria
+
+- [ ] `src/locales/uk.json` та `src/locales/en.json` створені
+- [ ] `LanguageContext.tsx` < 50 рядків (без translations inline)
+- [ ] Всі існуючі переклади працюють (UI не зламався)
+- [ ] Обидва JSON мають однакову кількість ключів
+- [ ] `npm run build` проходить
+- [ ] Переключення мови працює як раніше
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-29">
+<id>11ad9f5c-3a15-4a99-ad5a-e7412641bca9</id>
+<title>Drag & Drop Kanban для угод (DealsPage)</title>
+<description>
+## Контекст
+
+`DealsPage.tsx` (637 рядків) показує угоди таблицею. Потрібен Kanban-вигляд з drag & drop для зміни статусу угоди.
+
+## Файли
+
+* **Встановити:** `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+* **Створити:** `src/components/deals/KanbanBoard.tsx`
+* **Створити:** `src/components/deals/KanbanColumn.tsx`
+* **Створити:** `src/components/deals/KanbanCard.tsx`
+* **Змінити:** `src/pages/DealsPage.tsx` (додати toggle table/kanban)
+
+## Кроки
+
+1. Встановити:
+
+   ```bash
+   npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+   ```
+2. Визначити колонки Kanban за статусом угоди (з `worker-index.js` або API):
+   * `new` → "Нові"
+   * `negotiation` → "Переговори"
+   * `viewing` → "Перегляд"
+   * `offer` → "Пропозиція"
+   * `won` → "Виграно"
+   * `lost` → "Програно"
+3. Створити `KanbanBoard.tsx` з `DndContext`:
+
+   ```tsx
+   <DndContext onDragEnd={handleDragEnd}>
+     {columns.map(col => <KanbanColumn key={col} status={col} deals={dealsByStatus[col]} />)}
+   </DndContext>
+   ```
+4. `handleDragEnd` → API call `PATCH /api/deals/:id` з новим статусом
+5. У `DealsPage.tsx` додати toggle між table view та kanban view
+6. Зберегти вибраний view в localStorage
+
+## НЕ робити
+
+* Не видаляти table view — обидва повинні працювати
+* Не використовувати react-beautiful-dnd (deprecated)
+
+## Acceptance Criteria
+
+- [ ] Kanban board рендерить угоди по колонках-статусах
+- [ ] Drag & drop змінює статус угоди (API call)
+- [ ] Toggle між table/kanban працює
+- [ ] Вибраний view зберігається в localStorage
+- [ ] `npm run build` проходить
+- [ ] Mobile: горизонтальний scroll між колонками
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-32">
+<id>c3fe5271-cc42-4dbd-ae5d-98e083a5e758</id>
+<title>Skeleton loading замість спінерів</title>
+<description>
+## Контекст
+
+При завантаженні даних показується спінер (або порожня сторінка). Skeleton screens покращують perceived performance.
+
+## Файли
+
+* **Використати:** `src/components/ui/skeleton.tsx` (shadcn/ui — вже є у проєкті)
+* **Створити:** skeleton-варіанти для кожного типу контенту
+* **Змінити:** сторінки з `isLoading` стейтом
+
+## Кроки
+
+1. Створити `src/components/skeletons/PropertyCardSkeleton.tsx`:
+
+   ```tsx
+   import { Skeleton } from '@/components/ui/skeleton';
+   
+   export function PropertyCardSkeleton() {
+     return (
+       <div className="rounded-lg border p-4 space-y-3">
+         <Skeleton className="h-40 w-full" />
+         <Skeleton className="h-4 w-3/4" />
+         <Skeleton className="h-4 w-1/2" />
+         <div className="flex gap-2">
+           <Skeleton className="h-6 w-16" />
+           <Skeleton className="h-6 w-16" />
+         </div>
+       </div>
+     );
+   }
+   ```
+2. Створити аналогічні: `ClientRowSkeleton`, `DealRowSkeleton`, `DashboardSkeleton`, `TableSkeleton`
+3. У кожній сторінці замінити спінер на skeleton:
+
+   ```tsx
+   // БУЛО:
+   if (isLoading) return <Spinner />;
+   
+   // СТАЛО:
+   if (isLoading) return (
+     <div className="grid grid-cols-3 gap-4">
+       {Array.from({ length: 6 }).map((_, i) => <PropertyCardSkeleton key={i} />)}
+     </div>
+   );
+   ```
+4. Skeleton повинен візуально нагадувати реальний контент (розміри, layout)
+
+## НЕ робити
+
+* Не видаляти існуючий `Skeleton` компонент — використати його
+* Не анімувати skeleton (shadcn вже має pulse animation)
+
+## Acceptance Criteria
+
+- [ ] Мінімум 4 skeleton компоненти створені
+- [ ] PropertiesPage, ClientsPage, DashboardPage показують skeleton при loading
+- [ ] Skeleton візуально відповідає реальному контенту (layout збігається)
+- [ ] `npm run build` проходить
+- [ ] Немає "flash" між skeleton та реальним контентом
+</description>
+</sub-issue>
+</sub-issues>
+</issue>

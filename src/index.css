@@ -1,0 +1,215 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+:root {
+  --background: 0 0% 8%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 0%;             /* handled via backdrop-blur in card.tsx */
+  --card-foreground: 0 0% 96%;
+  --popover: 220 15% 12%;
+  --popover-foreground: 0 0% 96%;
+  /* Primary — Gold accent */
+  --primary: 38 70% 60%;
+  --primary-foreground: 30 8% 6%;
+  /* Accent */
+  --accent: 38 70% 60%;
+  --accent-foreground: 30 8% 6%;
+  /* Muted */
+  --muted: 220 10% 20%;
+  --muted-foreground: 220 8% 65%;
+  --secondary: 220 10% 18%;
+  --secondary-foreground: 0 0% 90%;
+  --border: 220 10% 25%;
+  --input: 220 10% 20%;
+  --ring: 38 70% 60%;
+  --radius: 0.5rem;
+  /* Sidebar */
+  --sidebar-background: 0 0% 4%;
+  --sidebar-foreground: 35 15% 92%;
+  --sidebar-primary: 38 70% 60%;
+  --sidebar-primary-foreground: 30 10% 8%;
+  --sidebar-accent: 30 8% 18%;
+  --sidebar-border: 30 8% 12%;
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, hsl(38 70% 55%) 0%, hsl(38 60% 45%) 100%);
+  --gradient-accent: linear-gradient(135deg, hsl(38 70% 60%) 0%, hsl(38 60% 70%) 100%);
+}
+.dark {
+  --background: 0 0% 6%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 0%;
+  --card-foreground: 0 0% 96%;
+  --primary: 38 70% 60%;
+  --primary-foreground: 30 8% 6%;
+  --accent: 38 70% 60%;
+  --muted: 220 10% 18%;
+  --muted-foreground: 220 8% 62%;
+  --border: 220 10% 22%;
+  --sidebar-background: 0 0% 3%;
+}
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Inputs/Selects/Textareas — напівпрозорі під темний фон */
+  input:not([type="checkbox"]):not([type="radio"]):not(.field-input),
+  textarea,
+  select {
+    background-color: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not(.field-input):focus,
+  textarea:focus,
+  select:focus {
+    background-color: rgba(255, 255, 255, 0.11) !important;
+    border-color: hsl(var(--ring)) !important;
+  }
+
+  input:not(.field-input)::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground)) !important;
+    opacity: 0.7;
+  }
+
+  /* Select trigger from shadcn */
+  [data-radix-select-trigger],
+  [role="combobox"] {
+    background-color: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-card {
+    background: var(--gradient-card);
+  }
+
+  .shadow-accent {
+    box-shadow: var(--shadow-accent);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background: var(--gradient-accent);
+  }
+
+  /* Status indicators */
+  .status-active {
+    @apply bg-success/10 text-success border-success/20;
+  }
+
+  .status-sold {
+    @apply bg-accent/10 text-accent border-accent/20;
+  }
+
+  .status-rented {
+    @apply bg-info/10 text-info border-info/20;
+  }
+
+  .status-available {
+    @apply bg-primary/10 text-primary border-primary/20;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20;
+  }
+
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-lg border border-white/10;
+  }
+
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-secondary/50 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/30 transition-colors;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+

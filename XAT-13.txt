@@ -1,0 +1,370 @@
+Work on Linear issue XAT-13:
+
+<issue identifier="XAT-13">
+<title>Фаза 2: Якість коду</title>
+<description>
+## Мета
+
+Покращити якість коду та архітектуру після стабілізації.
+
+**Repo:** `Vsevolodovichr/xatosfera`
+
+## Підзадачі
+
+1. **XAT-17** — Увімкнути strict TypeScript (поетапно)
+2. **XAT-18** — Впровадити React Query замість ручного кешу
+3. **XAT-19** — Code splitting (lazy loading сторінок)
+4. **XAT-20** — Розбити монолітні компоненти-сторінки
+5. **XAT-21** — Zod валідація API відповідей
+6. **XAT-22** — Pre-commit hooks (husky + lint-staged)
+
+**Залежності:** Фаза 1 (XAT-5) має бути завершена.
+
+**Критерій завершення:** strict TS увімкнений, React Query використовується для data fetching, сторінки lazy-loaded, pre-commit hooks працюють.
+</description>
+<team name="Xatosfera"/>
+<label>Improvement</label>
+<sub-issues>
+<sub-issue identifier="XAT-21">
+<id>8749d9ee-3edd-42ff-9c6c-33fc3b25c2e1</id>
+<title>Додати Zod валідацію API відповідей</title>
+<description>
+## Контекст
+
+Відповіді API cast-ятся через `as unknown[]`, `as Record<string, unknown>` — немає type safety на рівні runtime. Zod (v3.25.76) вже встановлений.
+
+## Файли
+
+* **Створити:** `src/types/schemas.ts` (Zod-схеми)
+* **Створити:** `src/types/api.ts` (TypeScript типи, згенеровані з Zod)
+* **Змінити:** `src/integrations/cloudflare/client.ts` (додати валідацію)
+
+## Кроки
+
+1. Створити `src/types/schemas.ts` з Zod-схемами для всіх entities:
+
+   ```ts
+   import { z } from 'zod';
+   
+   export const PropertySchema = z.object({
+     id: z.string(),
+     title: z.string(),
+     address: z.string().nullable(),
+     price: z.number().nullable(),
+     status: z.enum(['active', 'sold', 'reserved', 'archived']),
+     // ... всі поля з PROPERTY_FULL_COLUMNS у worker-index.js
+   });
+   
+   export const ClientSchema = z.object({ ... });
+   export const DealSchema = z.object({ ... });
+   // ... UserSchema, NoteSchema, CalendarEventSchema, etc.
+   ```
+2. Створити `src/types/api.ts`:
+
+   ```ts
+   export type Property = z.infer<typeof PropertySchema>;
+   export type Client = z.infer<typeof ClientSchema>;
+   ```
+3. Додати валідацію в API клієнт або custom hooks:
+
+   ```ts
+   const data = await cloudflareApi.get('/api/properties');
+   return PropertySchema.array().parse(data);
+   ```
+4. Визначити поля по константах з `worker-index.js`:
+   * `PROPERTY_FULL_COLUMNS` (рядок \~93)
+   * `NOTE_COLUMNS` (рядок \~94)
+   * `REPORT_COLUMNS` (рядок \~95)
+   * `USER_PUBLIC_COLUMNS` (рядок \~92)
+
+## Acceptance Criteria
+
+- [ ] Zod-схеми для мінімум 6 entities (Property, Client, Deal, User, Note, CalendarEvent)
+- [ ] TypeScript типи згенеровані з `z.infer<>`
+- [ ] `npm run build` проходить
+- [ ] API відповіді валідуються через `.parse()` або `.safeParse()`
+- [ ] Помилки валідації логуються в console (не крашать UI)
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-17">
+<id>6d2ae3c3-473f-4374-a6c2-d47adc251516</id>
+<title>Увімкнути strict TypeScript (поетапно)</title>
+<description>
+## Контекст
+
+TypeScript strict mode повністю вимкнений. Поточні налаштування:
+
+* `strict: false`
+* `noImplicitAny: false`
+* `strictNullChecks: false`
+* `noUnusedLocals: false`
+* `noUnusedParameters: false`
+
+## Файли
+
+* **Змінити:** `tsconfig.json`, `tsconfig.app.json`
+* **Виправити помилки у:** всіх файлах `src/` (\~95 файлів)
+
+## Кроки (поетапно, кожен крок = окремий коміт)
+
+### Крок 1: Увімкнути `noUnusedLocals` та `noUnusedParameters`
+
+1. У `tsconfig.json` встановити `"noUnusedLocals": true`, `"noUnusedParameters": true`
+2. У `tsconfig.app.json` встановити те саме
+3. `npx tsc --noEmit` — виправити всі помилки (видалити або prefix `_` невикористовувані змінні)
+
+### Крок 2: Увімкнути `strictNullChecks`
+
+1. Встановити `"strictNullChecks": true`
+2. `npx tsc --noEmit` — виправити null-check помилки (додати `?.`, `?? defaultValue`, `!` де впевнені)
+3. Особлива увага: `AuthContext.tsx` (user може бути null), `cloudflare/client.ts` (cache може бути null)
+
+### Крок 3: Увімкнути `noImplicitAny`
+
+1. Встановити `"noImplicitAny": true`
+2. `npx tsc --noEmit` — додати типи до всіх `any` параметрів
+3. Замінити `as any` на правильні типи де можливо
+
+### Крок 4: Увімкнути `strict: true`
+
+1. Замінити окремі flags на `"strict": true`
+2. `npx tsc --noEmit` — виправити решту
+
+## НЕ робити
+
+* Не використовувати `@ts-ignore` або `@ts-expect-error` крім крайніх випадків
+* Не замінювати `any` на `unknown` без подальшого narrowing
+* Не змінювати бізнес-логіку — тільки типізацію
+
+## Acceptance Criteria
+
+- [ ] `tsconfig.json` має `strict: true` (або еквівалент)
+- [ ] `npx tsc --noEmit` проходить без помилок
+- [ ] `npm run build` проходить
+- [ ] Кількість `as any` у коді зменшена мінімум на 50%
+- [ ] Кожен крок — окремий коміт для легкого review
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-19">
+<id>8a18ebb6-5d66-4f4a-a739-4127ef9a7367</id>
+<title>Code splitting — lazy loading сторінок</title>
+<description>
+## Контекст
+
+Всі 19 сторінок імпортуються синхронно в `App.tsx` — весь бандл (\~1.5MB) завантажується при першому візиті.
+
+## Файли
+
+* **Змінити:** `src/App.tsx` (рядки 39-55 — імпорти сторінок)
+
+## Кроки
+
+1. У `src/App.tsx` замінити статичні імпорти на `React.lazy()`:
+
+   ```tsx
+   // БУЛО:
+   import { PropertiesPage } from '@/pages/PropertiesPage';
+   
+   // СТАЛО:
+   const PropertiesPage = React.lazy(() => import('@/pages/PropertiesPage').then(m => ({ default: m.PropertiesPage })));
+   ```
+2. Зробити це для ВСІХ сторінок (19 штук):
+   * `LoginPage`, `RegisterPage`, `DashboardPage`, `PropertiesPage`, `PropertyFormPage`, `PropertyEditPage`, `PropertyDetailPage`, `ReportsPage`, `UsersPage`, `NotesPage`, `CalendarPage`, `DocumentsPage`, `ClientsPage`, `ClientDetailPage`, `DealsPage`, `MatchesPage`, `NotFound`
+3. Обгорнути routes в `<React.Suspense fallback={<LoadingSpinner />}>`
+4. Створити простий `LoadingSpinner` компонент (або використати існуючий спінер)
+5. Переконатися що кожна сторінка має `export default` або named export
+
+## НЕ робити
+
+* Не lazy-load `AppLayout`, `AppSidebar` — вони потрібні одразу
+* Не lazy-load контексти (`AuthProvider`, `LanguageProvider`)
+
+## Acceptance Criteria
+
+- [ ] Всі сторінки завантажуються через `React.lazy()`
+- [ ] `<Suspense>` обгортає routes з fallback
+- [ ] `npm run build` створює окремі chunks для кожної сторінки
+- [ ] Initial bundle зменшився (перевірити через `npx vite-bundle-visualizer`)
+- [ ] Навігація між сторінками працює без помилок
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-22">
+<id>782e4bca-0dff-4e95-9fd2-eec0b1cb0b40</id>
+<title>Налаштувати pre-commit hooks (husky + lint-staged)</title>
+<description>
+## Контекст
+
+Pre-commit hooks відсутні. Код може бути закомічений без lint перевірок.
+
+## Файли
+
+* **Створити:** `.husky/pre-commit`
+* **Змінити:** `package.json` (додати `lint-staged`, `husky`, `prettier` та scripts)
+
+## Кроки
+
+1. Встановити залежності:
+
+   ```bash
+   npm install -D husky lint-staged prettier
+   ```
+2. Ініціалізувати husky:
+
+   ```bash
+   npx husky init
+   ```
+3. Створити `.husky/pre-commit`:
+
+   ```bash
+   npx lint-staged
+   ```
+4. Додати конфігурацію `lint-staged` в `package.json`:
+
+   ```json
+   "lint-staged": {
+     "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+     "*.{json,md,css}": ["prettier --write"]
+   }
+   ```
+5. Створити `.prettierrc`:
+
+   ```json
+   {
+     "singleQuote": true,
+     "trailingComma": "all",
+     "printWidth": 100,
+     "semi": true
+   }
+   ```
+6. Додати script в `package.json`: `"prepare": "husky"`
+7. Тест: зробити зміну у `.ts` файлі → `git commit` → переконатися що lint-staged запускається
+
+## НЕ робити
+
+* Не форматувати весь проєкт одним комітом (буде величезний diff)
+* Не блокувати коміти через TypeScript помилки (поки strict не увімкнений)
+
+## Acceptance Criteria
+
+- [ ] `npm install` автоматично налаштовує husky hooks (`prepare` script)
+- [ ] `git commit` запускає lint-staged
+- [ ] ESLint помилки блокують коміт
+- [ ] Prettier форматує змінені файли
+- [ ] `.prettierrc` існує з конфігурацією
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-18">
+<id>9ffacc9a-8992-4968-b940-63b48c93555c</id>
+<title>Впровадити React Query замість ручного кешу</title>
+<description>
+## Контекст
+
+`@tanstack/react-query` (v5.83.0) вже встановлений і `QueryClientProvider` є в `App.tsx`, але **не використовується жодним компонентом**. Замість нього — кастомний in-memory cache у `src/integrations/cloudflare/client.ts` (Map з TTL 5 хв).
+
+## Файли
+
+* **Видалити кеш з:** `src/integrations/cloudflare/client.ts` (рядки \~22-40: `cache`, `cacheGet`, `cacheSet`, `invalidateCache`, `clearCache`)
+* **Створити hooks у:** `src/hooks/` (нова директорія)
+* **Змінити:** кожна сторінка в `src/pages/` (замінити `useEffect` + `useState` на `useQuery`)
+
+## Кроки
+
+1. Створити `src/hooks/useProperties.ts`:
+
+   ```ts
+   import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+   import { cloudflareApi } from '@/integrations/cloudflare/client';
+   
+   export function useProperties(params?) {
+     return useQuery({
+       queryKey: ['properties', params],
+       queryFn: () => cloudflareApi.get('/api/properties', params),
+       staleTime: 5 * 60 * 1000,
+     });
+   }
+   ```
+2. Аналогічно створити: `useClients.ts`, `useDeals.ts`, `useCalendar.ts`, `useNotes.ts`, `useUsers.ts`, `useReports.ts`, `useMatches.ts`, `useNotifications.ts`
+3. У кожній сторінці замінити:
+
+   ```ts
+   // БУЛО:
+   const [data, setData] = useState([]);
+   const [loading, setLoading] = useState(true);
+   useEffect(() => { fetchData(); }, []);
+   
+   // СТАЛО:
+   const { data, isLoading } = useProperties();
+   ```
+4. Для мутацій (create/update/delete) використовувати `useMutation` + `queryClient.invalidateQueries()`
+5. Видалити кастомний кеш з `client.ts` (`cache`, `cacheGet`, `cacheSet`, `invalidateCache`, `clearCache`)
+6. Зберегти `apiFetch()` як низькорівневий fetch wrapper (без кешу)
+
+## НЕ робити
+
+* Не видаляти `apiFetch()` — він потрібен як транспорт
+* Не змінювати API ендпоінти
+
+## Acceptance Criteria
+
+- [ ] Кастомний кеш видалений з `client.ts`
+- [ ] Мінімум 5 custom hooks створені в `src/hooks/`
+- [ ] Всі сторінки використовують `useQuery` для data fetching
+- [ ] `grep -r 'invalidateCache\|clearCache' src/` → 0 результатів
+- [ ] `npm run build` проходить
+- [ ] Дані оновлюються при мутаціях (create/edit/delete)
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-20">
+<id>cc3d93a0-99cd-4065-a15e-346d634f8234</id>
+<title>Розбити монолітні компоненти-сторінки на менші</title>
+<description>
+## Контекст
+
+Кожна сторінка — монолітний компонент 400-650 рядків з UI + стейт + логікою в одному файлі.
+
+Найбільші:
+
+* `PropertyDetailPage.tsx` — 657 рядків
+* `DealsPage.tsx` — 637 рядків
+* `PropertiesPage.tsx` — 630 рядків
+* `NotesPage.tsx` — 601 рядків
+* `ClientsPage.tsx` — 568 рядків
+
+## Файли
+
+* **Рефакторити:** 5 найбільших сторінок у `src/pages/`
+* **Створити:** компоненти в `src/components/` (нові піддиректорії)
+
+## Кроки (для кожної сторінки)
+
+### Приклад: `PropertiesPage.tsx` (630 рядків)
+
+1. Витягнути фільтри → `src/components/properties/PropertyFilters.tsx`
+2. Витягнути список → `src/components/properties/PropertyList.tsx`
+3. Витягнути картку → `src/components/properties/PropertyCard.tsx` (якщо нема)
+4. Витягнути діалоги → `src/components/properties/CreatePropertyDialog.tsx`
+5. `PropertiesPage.tsx` стає оркестратором: тільки layout + виклик компонентів
+
+### Для кожної з 5 сторінок:
+
+* Витягнути UI-блоки в `src/components/{domain}/`
+* Витягнути data-fetching в custom hooks `src/hooks/` (якщо XAT-18 не зроблено)
+* Сторінка < 150 рядків після рефакторингу
+
+## НЕ робити
+
+* Не змінювати бізнес-логіку
+* Не змінювати API виклики (тільки переносити)
+* Не рефакторити всі 19 сторінок — тільки 5 найбільших
+
+## Acceptance Criteria
+
+- [ ] 5 найбільших сторінок < 150 рядків кожна
+- [ ] Нові компоненти в `src/components/{domain}/`
+- [ ] `npm run build` проходить
+- [ ] Візуально додаток виглядає ідентично
+- [ ] Кожна сторінка — окремий коміт
+</description>
+</sub-issue>
+</sub-issues>
+</issue>

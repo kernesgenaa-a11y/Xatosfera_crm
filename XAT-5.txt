@@ -1,0 +1,335 @@
+Work on Linear issue XAT-5:
+
+<issue identifier="XAT-5">
+<title>Фаза 1: Стабілізація</title>
+<description>
+## Мета
+
+Закрити критичні проблеми безпеки, розбити монолітний бекенд, додати CI.
+
+**Repo:** `Vsevolodovichr/xatosfera`
+
+## Підзадачі (виконувати послідовно)
+
+1. <issue id="6d16a9f6-2c71-488e-865d-036fc6db38d7">XAT-6</issue> — Реструктуризація `worker-index.js` → TypeScript модулі
+2. <issue id="0647f664-6f53-463c-a3e8-9778a8fca773">XAT-7</issue> — Rate-limiting для auth endpoints
+3. <issue id="7dfa82be-2fe0-4ec4-af4a-af23023d0872">XAT-8</issue> — Закрити публічний доступ до файлів
+4. <issue id="ada89d35-7045-4d6b-b633-e34f119d09be">XAT-9</issue> — Уніфікувати API URL через `getApiUrl()`
+5. <issue id="a21fa929-8678-4857-b7a9-b781075856bb">XAT-10</issue> — Видалити мертвий код
+6. <issue id="66dec31d-cf40-4929-a8da-c60f92d9ff94">XAT-11</issue> — CI/CD (GitHub Actions)
+7. <issue id="19a3e7a3-c8f1-48d5-99df-76c59d08bbd8">XAT-12</issue> — Unit-тести для утиліт
+
+**Залежності:** Немає, це перша фаза.
+
+**Критерій завершення:** Всі 7 підзадач закриті, CI проходить, бекенд на TypeScript.
+</description>
+<team name="Xatosfera"/>
+<label>Improvement</label>
+<project name="Crm"/>
+<sub-issues>
+<sub-issue identifier="XAT-6">
+<id>6d16a9f6-2c71-488e-865d-036fc6db38d7</id>
+<title>Реструктуризація worker-index.js → TypeScript модулі</title>
+<description>
+## Контекст
+
+Весь бекенд — один файл `worker-index.js` (2371 рядок), скомпільований JS без вихідного TypeScript.
+
+## Файли
+
+* **Вхід:** `worker-index.js` (корінь репо)
+* **Вихід:** нова директорія `worker/src/`
+
+## Кроки
+
+1. Створити `worker/src/` та `worker/package.json` з залежностями `wrangler`, `typescript`, `vitest`
+2. Створити `worker/wrangler.toml`:
+   * `database_id = "d8ee9d0c-ac4d-4f23-b1ff-8ac3d9a3d5a6"`
+   * R2 bucket binding: `crm`
+3. Створити `worker/tsconfig.json` зі strict mode
+4. Розбити `worker-index.js` на модулі:
+   * `index.ts` — entry point, router
+   * `auth.ts` — `generateId`, `hashPassword`, `verifyPassword`, `createJWT`, `verifyJWT`, `generateRefreshToken` (рядки \~4-95)
+   * `properties.ts` — CRUD нерухомості
+   * `clients.ts` — CRUD клієнтів
+   * `deals.ts` — CRUD угод
+   * `calendar.ts` — CRUD подій
+   * `notes.ts` — CRUD завдань
+   * `notifications.ts` — сповіщення
+   * `reports.ts` — звіти
+   * `matches.ts` — matching
+   * `files.ts` — upload/download (R2)
+   * `users.ts` — управління юзерами
+   * `utils.ts` — `getAllowedOrigin`, `buildOrderClause`, `parseJsonArray`, `sanitizeUser`
+   * `types.ts` — інтерфейси `Env`, `User`, `Property`, `Client`, `Deal`
+5. НЕ видаляти `worker-index.js` — видалити окремим PR після перевірки
+
+## НЕ робити
+
+* Не змінювати логіку ендпоінтів — тільки перенесення
+* Не чіпати фронтенд (`src/`)
+
+## Acceptance Criteria
+
+- [ ] `worker/src/` містить усі модулі, кожен < 300 рядків
+- [ ] `npx wrangler deploy` успішно деплоїть Worker
+- [ ] Всі API ендпоінти працюють ідентично до рефакторингу
+- [ ] `npx tsc --noEmit` проходить без помилок
+</description>
+</sub-issue>
+Work on Linear issue XAT-7:
+
+<issue identifier="XAT-7">
+<title>Додати rate-limiting для auth endpoints</title>
+<description>
+## Контекст
+
+`/api/auth/login` та `/api/auth/register` не мають rate-limiting — brute-force можливий.
+
+## Файли
+
+* **Змінити:** `worker/src/auth.ts`, `worker/src/index.ts`
+* **Залежність:** XAT-6 (реструктуризація бекенду)
+
+## Кроки
+
+1. Створити `worker/src/middleware/rate-limiter.ts`
+2. Реалізувати rate limiter на D1 (таблиця `rate_limits`):
+
+   ```sql
+   CREATE TABLE rate_limits (key TEXT PRIMARY KEY, count INTEGER, window_start INTEGER);
+   ```
+3. Ключ: `rate:{ip}:{endpoint}`
+4. Ліміти:
+   * `/api/auth/login` — 5 спроб / 15 хвилин
+   * `/api/auth/register` — 3 спроби / 1 годину
+5. При перевищенні: `429 Too Many Requests` + `Retry-After` header
+6. Успішний логін скидає лічильник для цього IP
+
+## Acceptance Criteria
+
+- [ ] 6-й запит login з одного IP за 15 хв → 429
+- [ ] 4-й запит register з одного IP за годину → 429
+- [ ] Відповідь 429 містить `Retry-After`
+- [ ] Успішний логін скидає лічильник
+- [ ] Різні IP не впливають один на одного
+</description>
+<team name="Xatosfera"/>
+<label>Bug</label>
+<project name="Crm"/>
+<parent-issue identifier="XAT-5">
+<id>86dad8f3-bbaa-491a-9513-ebb56539bf35</id>
+<title>Фаза 1: Стабілізація</title>
+<description>
+## Мета
+
+Закрити критичні проблеми безпеки, розбити монолітний бекенд, додати CI.
+
+**Repo:** `Vsevolodovichr/xatosfera`
+
+## Підзадачі (виконувати послідовно)
+
+1. <issue id="6d16a9f6-2c71-488e-865d-036fc6db38d7">XAT-6</issue> — Реструктуризація `worker-index.js` → TypeScript модулі
+2. <issue id="0647f664-6f53-463c-a3e8-9778a8fca773">XAT-7</issue> — Rate-limiting для auth endpoints
+3. <issue id="7dfa82be-2fe0-4ec4-af4a-af23023d0872">XAT-8</issue> — Закрити публічний доступ до файлів
+4. <issue id="ada89d35-7045-4d6b-b633-e34f119d09be">XAT-9</issue> — Уніфікувати API URL через `getApiUrl()`
+5. <issue id="a21fa929-8678-4857-b7a9-b781075856bb">XAT-10</issue> — Видалити мертвий код
+6. <issue id="66dec31d-cf40-4929-a8da-c60f92d9ff94">XAT-11</issue> — CI/CD (GitHub Actions)
+7. <issue id="19a3e7a3-c8f1-48d5-99df-76c59d08bbd8">XAT-12</issue> — Unit-тести для утиліт
+
+**Залежності:** Немає, це перша фаза.
+
+**Критерій завершення:** Всі 7 підзадач закриті, CI проходить, бекенд на TypeScript.
+</description>
+</parent-issue>
+</issue>
+<sub-issue identifier="XAT-11">
+<id>66dec31d-cf40-4929-a8da-c60f92d9ff94</id>
+<title>Налаштувати CI/CD (GitHub Actions)</title>
+<description>
+## Контекст
+
+CI/CD повністю відсутній — немає GitHub Actions, немає автоматичного деплою.
+
+## Файли
+
+* **Створити:** `.github/workflows/ci.yml`
+* **Створити:** `.github/workflows/deploy.yml` (опціонально)
+
+## Кроки
+
+1. Створити `.github/workflows/ci.yml` з jobs:
+
+   ```yaml
+   name: CI
+   on: [push, pull_request]
+   jobs:
+     lint:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with: { node-version: 20 }
+         - run: npm ci
+         - run: npm run lint
+     typecheck:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with: { node-version: 20 }
+         - run: npm ci
+         - run: npx tsc --noEmit
+     test:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with: { node-version: 20 }
+         - run: npm ci
+         - run: npm run test
+     build:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with: { node-version: 20 }
+         - run: npm ci
+         - run: npm run build
+   ```
+2. Переконатися що `npm run lint`, `npx tsc --noEmit`, `npm run test`, `npm run build` проходять локально перед пушем
+
+## НЕ робити
+
+* Не додавати deploy step без секретів Cloudflare
+* Не модифікувати існуючий код щоб пройти CI — тільки створити workflow
+
+## Acceptance Criteria
+
+- [ ] `.github/workflows/ci.yml` існує
+- [ ] Workflow запускається на push та PR
+- [ ] Jobs: lint, typecheck, test, build — всі проходять
+- [ ] PR в GitHub показує статус CI checks
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-10">
+<id>a21fa929-8678-4857-b7a9-b781075856bb</id>
+<title>Видалити мертвий код та файли</title>
+<description>
+## Контекст
+
+У репо є файли-залишки від попередніх інтеграцій та backup-и.
+
+## Файли для видалення
+
+1. `PropertyFormPage.tsx.bak` — backup файл у репозиторії
+2. `src/integrations/pocketbase/client.ts` — залишок від PocketBase (не використовується, проєкт на Cloudflare)
+3. `0003_*.sql`, `0004_*.sql` — SQL-міграції в корені без міграційного фреймворку
+
+## Dead code для видалення
+
+4. `src/pages/PropertiesPage.tsx` — функція `downloadPresentation()` містить dead code після `return` (рядки \~111-335)
+5. Перевірити `src/integrations/pocketbase/` — видалити всю директорію якщо нічого з неї не імпортується
+
+## Кроки
+
+1. `grep -r 'pocketbase' src/` — переконатися що нічого не імпортує pocketbase
+2. Видалити файли з списку вище
+3. У `PropertiesPage.tsx` видалити dead code в `downloadPresentation()`
+4. `npm run build` — перевірити що нічого не зламалося
+
+## Acceptance Criteria
+
+- [ ] `PropertyFormPage.tsx.bak` видалений
+- [ ] `src/integrations/pocketbase/` директорія видалена
+- [ ] SQL файли з кореня видалені
+- [ ] Dead code в `downloadPresentation()` видалений
+- [ ] `npm run build` проходить
+- [ ] `npm run lint` проходить
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-12">
+<id>19a3e7a3-c8f1-48d5-99df-76c59d08bbd8</id>
+<title>Unit-тести для утиліт та API клієнта</title>
+<description>
+## Контекст
+
+Тестове покриття = 0%. Є тільки заглушка `expect(true).toBe(true)` у `src/test/example.test.ts`.
+Vitest вже налаштований (`vitest.config.ts`, `npm run test`).
+
+## Файли
+
+* **Тестувати:** утиліти та API клієнт
+* **Створити тести в:** `src/test/` або `src/__tests__/`
+* **Конфіг:** `vitest.config.ts` (вже існує), `src/test/setup.ts` (вже існує)
+
+## Кроки
+
+1. Написати unit-тести для `src/lib/utils.ts` — `cn()`, інші утиліти
+2. Написати unit-тести для `src/lib/api-url.ts` — `getApiUrl()` з різними env
+3. Написати unit-тести для `src/lib/file-validation.ts` — `validateFile()`
+4. Написати unit-тести для `src/lib/property-title.ts`
+5. Написати unit-тести для `src/lib/image-watermark.ts`
+6. Написати інтеграційні тести для `src/integrations/cloudflare/client.ts`:
+   * Mock `fetch`
+   * Тестувати `apiFetch()` — додавання auth header
+   * Тестувати auto-refresh на 401
+   * Тестувати cache — `cacheGet`, `cacheSet`, `invalidateCache`, `clearCache`
+7. Видалити заглушку `example.test.ts`
+
+## НЕ робити
+
+* Не писати E2E тести (це XAT-34)
+* Не писати компонентні тести (занадто рано)
+* Не змінювати вихідний код — тільки додавати тести
+
+## Acceptance Criteria
+
+- [ ] `npm run test` проходить
+- [ ] Мінімум 15 тестів для утиліт
+- [ ] Мінімум 5 тестів для API клієнта (з mock fetch)
+- [ ] `example.test.ts` заглушка видалена
+- [ ] Покриття утиліт > 80%
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-9">
+<id>ada89d35-7045-4d6b-b633-e34f119d09be</id>
+<title>Уніфікувати API URL — єдиний getApiUrl()</title>
+<description>
+## Контекст
+
+API URL визначається у 4 різних місцях з різними fallback значеннями. Ризик: фронтенд може підключитися до production замість dev.
+
+## Файли
+
+* **Джерело істини:** `src/lib/api-url.ts` — `getApiUrl()`
+* **Замінити hardcoded URL у:**
+  * `src/integrations/cloudflare/client.ts` рядок 10: `const API_URL = import.meta.env.VITE_API_URL || 'https://crm-api.0991597753r.workers.dev'`
+  * `src/contexts/NotificationsContext.tsx` — hardcoded API URL
+  * `src/contexts/MatchesContext.tsx` — вже використовує `getApiUrl()` ✓
+  * `src/pages/DashboardPage.tsx` — hardcoded fallback
+
+## Кроки
+
+1. Відкрити `src/lib/api-url.ts` — переконатися що `getApiUrl()` єдина точка визначення URL
+2. У `src/integrations/cloudflare/client.ts`:
+   * Замінити `const API_URL = import.meta.env.VITE_API_URL || '...'` на `import { getApiUrl } from '@/lib/api-url'; const API_URL = getApiUrl();`
+3. У `src/contexts/NotificationsContext.tsx`:
+   * Замінити hardcoded URL на `getApiUrl()`
+4. У `src/pages/DashboardPage.tsx`:
+   * Замінити hardcoded fallback на `getApiUrl()`
+5. Пошук по всьому проєкту: `grep -r 'crm-api.0991597753r' src/` — замінити всі залишки
+
+## НЕ робити
+
+* Не змінювати `worker-index.js` / бекенд
+* Не видаляти `VITE_API_URL` з env — `getApiUrl()` має його читати
+
+## Acceptance Criteria
+
+- [ ] `grep -r 'crm-api.0991597753r' src/` → 0 результатів (крім api-url.ts)
+- [ ] `npm run build` проходить без помилок
+- [ ] Додаток працює з `VITE_API_URL=http://localhost:8787`
+- [ ] Додаток працює без `VITE_API_URL` (fallback на production)
+</description>
+</sub-issue>

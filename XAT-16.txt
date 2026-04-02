@@ -1,0 +1,558 @@
+Work on Linear issue XAT-16:
+
+<issue identifier="XAT-16">
+<title>Фаза 5: Масштабування</title>
+<description>
+## Мета
+
+Додати інфраструктуру для масштабування, тестування та інтеграцій.
+
+**Repo:** `Vsevolodovichr/xatosfera`
+
+## Підзадачі
+
+1. **XAT-34** — E2E тести (Playwright)
+2. **XAT-35** — Telegram бот для нотифікацій
+3. **XAT-36** — Matching engine — покращити алгоритм
+4. **XAT-37** — Audit log (журнал дій)
+5. **XAT-38** — OpenAPI / Swagger документація
+6. **XAT-39** — RBAC (ролі та дозволи)
+7. **XAT-40** — Інтеграція з зовнішніми порталами
+
+**Залежності:** Фази 1-3 мають бути завершені.
+
+**Критерій завершення:** E2E тести покривають golden path, audit log працює, API задокументований.
+</description>
+<team name="Xatosfera"/>
+<label>Feature</label>
+<sub-issues>
+<sub-issue identifier="XAT-38">
+<id>dda02428-b89b-47b7-b766-c9d85da3b52b</id>
+<title>OpenAPI / Swagger документація для API</title>
+<description>
+## Контекст
+
+API не задокументований. Ендпоінти, параметри та response формати відомі тільки з коду.
+
+## Файли
+
+* **Створити:** `docs/openapi.yaml` (або `openapi.json`)
+* **Змінити:** `worker/src/index.ts` (або `worker-index.js`) — додати `/api/docs` route
+
+## Кроки
+
+1. Проаналізувати всі ендпоінти з `worker-index.js` та створити OpenAPI spec:
+
+   ```yaml
+   openapi: 3.0.3
+   info:
+     title: Xatosfera CRM API
+     version: 1.0.0
+   servers:
+     - url: https://crm-api.0991597753r.workers.dev
+   paths:
+     /api/auth/login:
+       post:
+         summary: Login
+         requestBody:
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   email: { type: string }
+                   password: { type: string }
+         responses:
+           '200': ...
+     /api/properties:
+       get:
+         summary: List properties
+         security:
+           - bearerAuth: []
+         parameters:
+           - name: status
+             in: query
+             schema: { type: string }
+         responses:
+           '200': ...
+   ```
+2. Задокументувати ВСІ ендпоінти (мінімум):
+   * Auth: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/refresh`
+   * Properties: `GET`, `POST`, `GET /:id`, `PUT /:id`, `DELETE /:id`
+   * Clients: `GET`, `POST`, `GET /:id`, `PUT /:id`, `DELETE /:id`
+   * Deals: `GET`, `POST`, `GET /:id`, `PUT /:id`, `DELETE /:id`
+   * Notes, Calendar, Files, Users, Reports, Matches, Notifications
+3. Додати route `/api/docs` що повертає OpenAPI spec як JSON
+4. (Опціонально) Додати Swagger UI через CDN:
+
+   ```html
+   <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+   ```
+
+## НЕ робити
+
+* Не використовувати auto-generation (занадто складно для compiled JS)
+* Не додавати залежностей до worker
+
+## Acceptance Criteria
+
+- [ ] `docs/openapi.yaml` створений з усіма ендпоінтами
+- [ ] Мінімум 20 ендпоінтів задокументовані
+- [ ] Кожний ендпоінт має: summary, parameters, requestBody (якщо POST/PUT), responses
+- [ ] `GET /api/docs` повертає OpenAPI JSON
+- [ ] Spec валідний (перевірити через [https://editor.swagger.io](<https://editor.swagger.io>))
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-39">
+<id>37fcf86e-c42e-40b4-993b-a33e1cdc10cc</id>
+<title>RBAC — ролі та дозволи користувачів</title>
+<description>
+## Контекст
+
+Поточна система має `role` поле в `users` таблиці, але перевірок ролей немає ні на бекенді, ні на фронтенді. Всі авторизовані юзери мають однакові права.
+
+## Файли
+
+### Бекенд
+
+* **Створити:** `worker/src/middleware/rbac.ts`
+* **Змінити:** `worker/src/index.ts` (або `worker-index.js`) — додати middleware
+* **Змінити:** `worker/src/users.ts` — ендпоінт зміни ролі
+
+### Фронтенд
+
+* **Створити:** `src/hooks/usePermissions.ts`
+* **Змінити:** `src/contexts/AuthContext.tsx` — додати role в контекст
+* **Змінити:** компоненти, де потрібно ховати кнопки по ролі
+
+## Кроки
+
+### Ролі
+
+1. Визначити ролі:
+   * `admin` — повний доступ + управління юзерами
+   * `manager` — CRUD properties, clients, deals, notes
+   * `viewer` — тільки читання
+
+### Бекенд
+
+2. Створити `worker/src/middleware/rbac.ts`:
+
+   ```ts
+   const PERMISSIONS = {
+     admin: ['*'],
+     manager: ['properties:*', 'clients:*', 'deals:*', 'notes:*', 'calendar:*', 'files:*'],
+     viewer: ['properties:read', 'clients:read', 'deals:read', 'notes:read'],
+   };
+   
+   export function requirePermission(permission: string) {
+     return (request: Request, user: User) => {
+       const userPerms = PERMISSIONS[user.role] || [];
+       if (!userPerms.includes('*') && !userPerms.includes(permission)) {
+         return new Response('Forbidden', { status: 403 });
+       }
+     };
+   }
+   ```
+3. Додати перевірку перед кожним mutation handler:
+
+   ```ts
+   // POST /api/properties
+   const forbidden = requirePermission('properties:create')(request, user);
+   if (forbidden) return forbidden;
+   ```
+4. `DELETE /api/users/:id` — тільки admin
+5. `PUT /api/users/:id/role` — тільки admin
+
+### Фронтенд
+
+6. Створити `usePermissions.ts`:
+
+   ```ts
+   export function usePermissions() {
+     const { user } = useAuth();
+     return {
+       canCreate: user?.role === 'admin' || user?.role === 'manager',
+       canDelete: user?.role === 'admin',
+       canManageUsers: user?.role === 'admin',
+       isViewer: user?.role === 'viewer',
+     };
+   }
+   ```
+7. Ховати кнопки "Створити", "Видалити" для viewer
+8. Ховати сторінку Users для не-admin
+
+## Acceptance Criteria
+
+- [ ] 3 ролі визначені: admin, manager, viewer
+- [ ] Бекенд повертає 403 для неавторизованих дій
+- [ ] Viewer не може створювати/змінювати/видаляти
+- [ ] Тільки admin може управляти юзерами
+- [ ] Фронтенд ховає кнопки відповідно до ролі
+- [ ] `npx wrangler deploy` проходить
+- [ ] `npm run build` проходить
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-40">
+<id>0d9138d0-7d53-4baa-9f32-ade71b9e1685</id>
+<title>Інтеграція з зовнішніми порталами нерухомості</title>
+<description>
+## Контекст
+
+Об'єкти нерухомості вводяться вручну. Потрібна можливість автоматичного експорту на зовнішні портали (OLX, DIM.RIA тощо).
+
+## Файли
+
+### Бекенд
+
+* **Створити:** `worker/src/integrations/olx.ts`
+* **Створити:** `worker/src/integrations/dimria.ts`
+* **Створити:** `worker/src/integrations/index.ts` (registry)
+* **Змінити:** `worker/src/properties.ts` — додати export action
+
+### Фронтенд
+
+* **Створити:** `src/components/properties/ExportDialog.tsx`
+* **Змінити:** `src/pages/PropertyDetailPage.tsx` — додати кнопку "Експорт"
+
+## Кроки
+
+1. Створити абстракцію інтеграції:
+
+   ```ts
+   // worker/src/integrations/index.ts
+   export interface PortalIntegration {
+     name: string;
+     export(property: Property, credentials: PortalCredentials): Promise<{ externalId: string; url: string }>;
+     update(externalId: string, property: Property, credentials: PortalCredentials): Promise<void>;
+     delete(externalId: string, credentials: PortalCredentials): Promise<void>;
+   }
+   ```
+2. Реалізувати OLX API інтеграцію (якщо API доступний):
+   * `POST https://www.olx.ua/api/partner/adverts` (Partner API)
+   * Маппінг полів: title, description, price, photos, category
+3. SQL для tracking:
+
+   ```sql
+   CREATE TABLE IF NOT EXISTS property_exports (
+     id TEXT PRIMARY KEY,
+     property_id TEXT NOT NULL,
+     portal TEXT NOT NULL,          -- 'olx' | 'dimria'
+     external_id TEXT,
+     external_url TEXT,
+     status TEXT DEFAULT 'pending', -- 'pending' | 'active' | 'error'
+     last_synced_at TEXT,
+     FOREIGN KEY (property_id) REFERENCES properties(id)
+   );
+   ```
+4. Ендпоінт: `POST /api/properties/:id/export` з `{ portal: 'olx' }`
+5. У `PropertyDetailPage.tsx` додати кнопку "Експорт на OLX" з діалогом
+6. Показувати статус експорту на сторінці деталей
+
+## НЕ робити
+
+* Не реалізовувати імпорт з порталів (тільки експорт)
+* Не hardcode-ити API ключі — зберігати як Cloudflare secrets
+* Не реалізовувати real-time синхронізацію — тільки manual export
+
+## Acceptance Criteria
+
+- [ ] Абстракція `PortalIntegration` створена
+- [ ] Мінімум 1 портал реалізований (OLX або DIM.RIA)
+- [ ] Таблиця `property_exports` створена
+- [ ] UI кнопка "Експорт" на сторінці деталей property
+- [ ] Статус експорту відображається
+- [ ] API ключі зберігаються як Cloudflare secrets
+- [ ] `npx wrangler deploy` проходить
+- [ ] `npm run build` проходить
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-34">
+<id>e0b62a62-8e89-453c-9121-15984d7f4e71</id>
+<title>E2E тести (Playwright) — golden path</title>
+<description>
+## Контекст
+
+Немає жодного E2E тесту. Потрібно покрити основні user flows.
+
+## Файли
+
+* **Створити:** `playwright.config.ts`
+* **Створити:** `e2e/` директорія
+* **Створити:** `e2e/auth.spec.ts`
+* **Створити:** `e2e/properties.spec.ts`
+* **Створити:** `e2e/deals.spec.ts`
+* **Створити:** `e2e/clients.spec.ts`
+* **Змінити:** `package.json` (додати scripts та devDependencies)
+
+## Кроки
+
+1. Встановити Playwright:
+
+   ```bash
+   npm install -D @playwright/test
+   npx playwright install chromium
+   ```
+2. Створити `playwright.config.ts`:
+
+   ```ts
+   import { defineConfig } from '@playwright/test';
+   export default defineConfig({
+     testDir: './e2e',
+     baseURL: 'http://localhost:5173',
+     webServer: {
+       command: 'npm run dev',
+       port: 5173,
+       reuseExistingServer: true,
+     },
+     use: { screenshot: 'only-on-failure' },
+   });
+   ```
+3. Створити `e2e/auth.spec.ts`:
+   * Тест 1: Login з валідними credentials
+   * Тест 2: Login з невалідним паролем → показує помилку
+   * Тест 3: Redirect на /login якщо не авторизований
+4. Створити `e2e/properties.spec.ts`:
+   * Тест 1: Список properties завантажується
+   * Тест 2: Створення нового property
+   * Тест 3: Фільтрація по статусу
+5. Створити `e2e/deals.spec.ts`:
+   * Тест 1: Список deals завантажується
+   * Тест 2: Створення нового deal
+6. Створити `e2e/clients.spec.ts`:
+   * Тест 1: Список clients завантажується
+   * Тест 2: Перехід на деталі клієнта
+7. Додати scripts в `package.json`:
+
+   ```json
+   "test:e2e": "playwright test",
+   "test:e2e:ui": "playwright test --ui"
+   ```
+
+## НЕ робити
+
+* Не використовувати Cypress — Playwright краще інтегрується з CI
+* Не тестувати кожну дрібницю — тільки golden path
+* Не hardcode-ити credentials — використати env vars
+
+## Acceptance Criteria
+
+- [ ] `npx playwright test` запускається і проходить
+- [ ] Мінімум 10 E2E тестів
+- [ ] Покрито: auth, properties CRUD, deals list, clients list
+- [ ] Screenshots при failure зберігаються
+- [ ] CI job для E2E тестів (у `.github/workflows/ci.yml`)
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-35">
+<id>d96254af-f009-4c31-b5f3-318f14fd4d1e</id>
+<title>Telegram бот для нотифікацій</title>
+<description>
+## Контекст
+
+Нотифікації існують в БД (`notifications` таблиця) і показуються в UI (`src/contexts/NotificationsContext.tsx`), але не відправляються зовнішніми каналами.
+
+## Файли
+
+### Бекенд
+
+* **Створити:** `worker/src/telegram.ts` (Telegram Bot API client)
+* **Змінити:** `worker/src/notifications.ts` (або `worker-index.js`) — додати відправку
+* **Змінити:** `wrangler.toml` — додати `TELEGRAM_BOT_TOKEN` secret
+
+### Фронтенд
+
+* **Створити:** `src/pages/SettingsPage.tsx` або секція в profile — налаштування Telegram
+
+### Бекенд (DB)
+
+* **SQL:** `ALTER TABLE users ADD COLUMN telegram_chat_id TEXT;`
+
+## Кроки
+
+1. Створити Telegram бот через @BotFather (інструкція в README)
+2. Створити `worker/src/telegram.ts`:
+
+   ```ts
+   export async function sendTelegramMessage(chatId: string, text: string, botToken: string) {
+     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+     });
+   }
+   ```
+3. Додати ендпоінт `POST /api/telegram/webhook` для отримання chat_id:
+   * Юзер пише `/start` боту → webhook отримує `chat_id` → зберігає в БД
+4. У notification creation flow додати виклик `sendTelegramMessage()`
+5. Нотифікувати при:
+   * Новий lead/клієнт
+   * Зміна статусу угоди
+   * Новий коментар/нотатка
+6. Додати `TELEGRAM_BOT_TOKEN` як secret в wrangler:
+
+   ```bash
+   npx wrangler secret put TELEGRAM_BOT_TOKEN
+   ```
+
+## НЕ робити
+
+* Не реалізовувати full command bot — тільки нотифікації
+* Не зберігати bot token в коді
+
+## Acceptance Criteria
+
+- [ ] `worker/src/telegram.ts` створений
+- [ ] Telegram повідомлення відправляється при створенні notification
+- [ ] Юзер може прив'язати свій Telegram через `/start` команду
+- [ ] `telegram_chat_id` зберігається в таблиці `users`
+- [ ] `npx wrangler deploy` проходить
+- [ ] Bot token зберігається як Cloudflare secret (не в коді)
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-36">
+<id>e79145d2-9a1c-437f-acff-27067d4ac93d</id>
+<title>Matching engine — покращити алгоритм підбору</title>
+<description>
+## Контекст
+
+Поточний matching (`worker-index.js`, рядки \~1800-1900) — простий SQL `WHERE` з точними збігами. Потрібен scoring-based алгоритм.
+
+## Файли
+
+* **Змінити:** `worker/src/matches.ts` (або `worker-index.js` якщо XAT-6 не зроблений)
+* **Змінити:** `src/pages/MatchesPage.tsx` (відображення score)
+
+## Кроки
+
+1. Замінити точний match на scoring алгоритм:
+
+   ```ts
+   function calculateMatchScore(property: Property, client: ClientRequirements): number {
+     let score = 0;
+     const maxScore = 100;
+     
+     // Ціна (30 балів): в діапазоні budget ±10%
+     if (property.price >= client.budgetMin * 0.9 && property.price <= client.budgetMax * 1.1) {
+       score += 30;
+     } else if (property.price >= client.budgetMin * 0.8 && property.price <= client.budgetMax * 1.2) {
+       score += 15; // частковий збіг
+     }
+     
+     // Район (25 балів): точний збіг
+     if (property.district === client.preferredDistrict) score += 25;
+     
+     // Тип (20 балів)
+     if (property.type === client.preferredType) score += 20;
+     
+     // Кімнати (15 балів)
+     if (property.rooms >= client.minRooms && property.rooms <= client.maxRooms) score += 15;
+     
+     // Площа (10 балів)
+     if (property.area >= client.minArea) score += 10;
+     
+     return score;
+   }
+   ```
+2. Ендпоінт `GET /api/matches?clientId=xxx` повертає properties з score:
+
+   ```json
+   {
+     "matches": [
+       { "property": {...}, "score": 85, "matchDetails": {"price": true, "district": true, ...} },
+       { "property": {...}, "score": 60, "matchDetails": {...} }
+     ]
+   }
+   ```
+3. Сортувати по score DESC, показувати тільки score > 30
+4. У `MatchesPage.tsx` показувати score та деталі збігу (які критерії збіглися)
+
+## НЕ робити
+
+* Не використовувати ML або зовнішні API
+* Не змінювати структуру БД (використати існуючі поля)
+
+## Acceptance Criteria
+
+- [ ] Matching повертає score 0-100 для кожного property
+- [ ] Результати відсортовані по score DESC
+- [ ] UI показує score та деталі збігу
+- [ ] Фільтрується: тільки score > 30
+- [ ] `npx wrangler deploy` проходить
+- [ ] `npm run build` проходить
+</description>
+</sub-issue>
+<sub-issue identifier="XAT-37">
+<id>47c194e2-e38d-4851-af6b-80b809056da4</id>
+<title>Audit log — журнал дій користувачів</title>
+<description>
+## Контекст
+
+Немає журналу дій. Неможливо відстежити хто що змінив, видалив, створив.
+
+## Файли
+
+### Бекенд
+
+* **Створити:** `worker/src/audit.ts`
+* **Змінити:** `worker/src/properties.ts`, `worker/src/clients.ts`, `worker/src/deals.ts` (або `worker-index.js`)
+
+### Фронтенд
+
+* **Створити:** `src/pages/AuditLogPage.tsx`
+* **Змінити:** `src/App.tsx` (додати route)
+* **Змінити:** `src/components/layout/AppSidebar.tsx` (додати пункт меню)
+
+## Кроки
+
+### Бекенд
+
+1. Створити таблицю:
+
+   ```sql
+   CREATE TABLE IF NOT EXISTS audit_log (
+     id TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL,
+     user_name TEXT,
+     action TEXT NOT NULL,        -- 'create' | 'update' | 'delete'
+     entity_type TEXT NOT NULL,   -- 'property' | 'client' | 'deal' | 'note'
+     entity_id TEXT NOT NULL,
+     changes TEXT,                -- JSON diff: {"field": {"old": "...", "new": "..."}}
+     created_at TEXT DEFAULT (datetime('now'))
+   );
+   ```
+2. Створити `worker/src/audit.ts`:
+
+   ```ts
+   export async function logAction(db: D1Database, params: {
+     userId: string; userName: string;
+     action: 'create' | 'update' | 'delete';
+     entityType: string; entityId: string;
+     changes?: Record<string, { old: unknown; new: unknown }>;
+   }) {
+     await db.prepare('INSERT INTO audit_log ...').bind(...).run();
+   }
+   ```
+3. Додати виклик `logAction()` в кожний POST/PUT/PATCH/DELETE handler
+4. Ендпоінт: `GET /api/audit?entityType=property&entityId=xxx&limit=50`
+5. Для `update` — зберігати diff (старе vs нове значення)
+
+### Фронтенд
+
+6. Створити `AuditLogPage.tsx`:
+   * Таблиця: дата, юзер, дія, entity, деталі
+   * Фільтри: по entity_type, по user, по даті
+7. На сторінці деталей property/client/deal — показати останні 5 записів audit log
+
+## Acceptance Criteria
+
+- [ ] Таблиця `audit_log` створена
+- [ ] Кожний CRUD запис логується з user_id та changes
+- [ ] `GET /api/audit` повертає записи з пагінацією
+- [ ] UI сторінка показує журнал дій з фільтрами
+- [ ] `npx wrangler deploy` проходить
+- [ ] `npm run build` проходить
+</description>
+</sub-issue>
+</sub-issues>
+</issue>

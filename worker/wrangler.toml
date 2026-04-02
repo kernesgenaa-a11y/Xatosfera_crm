@@ -1,0 +1,38 @@
+name = "crm-api-ts"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "crm"
+database_id = "d8ee9d0c-ac4d-4f23-b1ff-8ac3d9a3d5a6"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "crm"
+
+[images]
+binding = "IMAGES"
+
+[[queues.producers]]
+binding = "IMAGES_QUEUE"
+queue = "crm-images"
+
+[[queues.consumers]]
+queue = "crm-images"
+
+[browser]
+binding = "BROWSER"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
